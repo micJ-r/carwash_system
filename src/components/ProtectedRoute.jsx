@@ -23,11 +23,11 @@ function ProtectedRoute({ children, adminOnly = false, userOnly = false }) {
   const role = (user?.role || 'USER').toUpperCase();
 
   if (adminOnly && role !== 'ADMIN') {
-    return <Navigate to="/" replace />; // Redirect to home instead of unauthorized
+    return <Navigate to="/booking" replace />; // Redirect USER to /booking
   }
 
   if (userOnly && role !== 'USER') {
-    return <Navigate to="/" replace />; // Redirect to home instead of unauthorized
+    return <Navigate to="/admin/dashboard" replace />; // Redirect ADMIN to /admin/dashboard
   }
 
   return children;

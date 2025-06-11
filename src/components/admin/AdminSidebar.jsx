@@ -29,7 +29,12 @@ function AdminSidebar() {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      setSidebarOpen(!mobile);
+      // On desktop, always show sidebar
+      if (!mobile) {
+        setSidebarOpen(true);
+      } else {
+        setSidebarOpen(false);
+      }
     };
 
     window.addEventListener('resize', handleResize);
@@ -43,17 +48,6 @@ function AdminSidebar() {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      {isMobile && (
-        <button
-          onClick={toggleSidebar}
-          className="fixed z-50 bottom-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg md:hidden"
-          aria-label="Toggle menu"
-        >
-          {sidebarOpen ? <FiX size={24} /> : <FiMenu size={24} />}
-        </button>
-      )}
-
       {/* Sidebar */}
       <aside
         className={`bg-gray-800 fixed h-full shadow-lg transition-all duration-300 z-40
@@ -63,7 +57,7 @@ function AdminSidebar() {
         <div className="p-4 h-full flex flex-col">
           <div className="flex justify-between items-center mb-6 p-2">
             <h2 className="text-white text-xl md:text-2xl font-bold truncate">
-              Car Wash Admin
+              WashPro Admin
             </h2>
             {isMobile && (
               <button 
@@ -81,7 +75,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/dashboard" 
-                  className={linkClass('/dashboard')}
+                  className={linkClass('/admin/dashboard')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiHome className="mr-3 min-w-[20px]" /> 
@@ -92,7 +86,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/bookings" 
-                  className={linkClass('/bookings')}
+                  className={linkClass('/admin/bookings')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiCalendar className="mr-3 min-w-[20px]" /> 
@@ -103,7 +97,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/customers" 
-                  className={linkClass('/customers')}
+                  className={linkClass('/admin/customers')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiUsers className="mr-3 min-w-[20px]" /> 
@@ -114,7 +108,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/staff" 
-                  className={linkClass('/staff')}
+                  className={linkClass('/admin/staff')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiShield className="mr-3 min-w-[20px]" /> 
@@ -125,7 +119,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/services" 
-                  className={linkClass('/services')}
+                  className={linkClass('/admin/services')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiTruck className="mr-3 min-w-[20px]" /> 
@@ -136,7 +130,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/payments" 
-                  className={linkClass('/payments')}
+                  className={linkClass('/admin/payments')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiDollarSign className="mr-3 min-w-[20px]" /> 
@@ -147,7 +141,7 @@ function AdminSidebar() {
               <li>
                 <Link 
                   to="/admin/reports" 
-                  className={linkClass('/reports')}
+                  className={linkClass('/admin/reports')}
                   onClick={() => isMobile && setSidebarOpen(false)}
                 >
                   <FiFileText className="mr-3 min-w-[20px]" /> 
@@ -160,7 +154,7 @@ function AdminSidebar() {
           <div className="mt-auto pt-2 border-t border-gray-700">
             <Link 
               to="/admin/settings" 
-              className={linkClass('/settings')}
+              className={linkClass('/admin/settings')}
               onClick={() => isMobile && setSidebarOpen(false)}
             >
               <FiSettings className="mr-3 min-w-[20px]" /> 

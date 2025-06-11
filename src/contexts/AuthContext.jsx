@@ -1,5 +1,4 @@
-// src/contexts/AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,68 +7,92 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const res = await axios.get('/auth/verify', { withCredentials: true });
-        const userFromBackend = res.data.user; // assume backend returns full user data
-        setUser(userFromBackend);
-        redirectBasedOnRole(userFromBackend);
-      } catch (err) {
-        console.warn('No active session');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const redirectBasedOnRole = useCallback((userData) => {
+    if (!userData) {
+      navigate('/login');
+      return;
+    }
 
-    initializeAuth();
+    const role = userData.role?.toUpperCase() || 'USER';
+    const currentPath = window.location.pathname;
+
+    // Prevent infinite redirects by checking current path
+    if (role === 'ADMIN' && !currentPath.startsWith('/admin')) {
+      navigate('/admin/dashboard', { replace: true });
+    } else if (role === 'USER' && !currentPath.startsWith('/booking')) {
+      navigate('/user/booking', { replace: true }); // Changed to /booking as per requirement
+    }
+  }, [navigate]);
+
+  const verifySession = useCallback(async () => {
+    try {
+      const res = await axios.get('/auth/verify', { withCredentials: true });
+      const userData = res.data.user;
+      setUser(userData);
+      setAuthError(null);
+      return userData;
+    } catch (err) {
+      setAuthError(err.response?.data?.error || 'Session expired');
+      setUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const redirectBasedOnRole = (user) => {
-  const path = window.location.pathname;
-  if (user.role === 'ADMIN' && !path.startsWith('/admin')) {
-    navigate('/admin/dashboard');
-  } else if (user.role !== 'ADMIN' && !path.startsWith('/user')) {
-    navigate('/user/dashboard');
-  }
-};
-
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Skip session verification if user is already authenticated
+      if (!user) {
+        const userData = await verifySession();
+        redirectBasedOnRole(userData);
+      } else {
+        setLoading(false); // Set loading to false if user is already set
+      }
+    };
+    checkAuth();
+  }, [verifySession, redirectBasedOnRole, user]);
 
   const login = async (email, password) => {
+    setLoading(true);
     try {
-      const response = await axios.post('/auth/login', { email, password }, {
+      const res = await axios.post('/auth/login', { email, password }, {
         withCredentials: true,
       });
-
-      const userData = response.data;
+      const userData = res.data; // Expecting { role, id, email, username }
       setUser(userData);
-      redirectBasedOnRole(userData);
+      setAuthError(null);
+      redirectBasedOnRole(userData); // Call redirect immediately after setting user
       return { success: true, user: userData };
     } catch (err) {
-      return {
-        success: false,
-        error: err.response?.data?.error || 'Login failed',
-      };
+      const errorMsg = err.response?.data?.error || 'Login failed';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setLoading(false);
     }
   };
 
   const register = async (userData) => {
+    setLoading(true);
     try {
-      const response = await axios.post('/auth/register', userData, {
+      const res = await axios.post('/auth/register', userData, {
         withCredentials: true,
       });
-
-      const newUser = response.data;
+      const newUser = res.data;
       setUser(newUser);
       redirectBasedOnRole(newUser);
+      setAuthError(null);
       return { success: true, data: newUser };
     } catch (err) {
-      return {
-        success: false,
-        error: err.response?.data?.error || 'Registration failed',
-      };
+      const errorMsg = err.response?.data?.error || 'Registration failed';
+      setAuthError(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,30 +100,42 @@ export function AuthProvider({ children }) {
     try {
       await axios.post('/auth/logout', {}, { withCredentials: true });
     } catch (err) {
-      console.error('Logout error:', err);
+      console.error('Logout failed', err);
     } finally {
       setUser(null);
+      setAuthError(null);
       navigate('/login');
     }
   };
 
-  const value = {
-    user,
-    loading,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === 'ADMIN',
+  const refreshToken = async () => {
+    try {
+      await axios.post('/auth/refresh', {}, { withCredentials: true });
+      return await verifySession();
+    } catch (err) {
+      console.error('Token refresh failed:', err);
+      await logout();
+      return null;
+    }
   };
 
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        authError,
+        login,
+        register,
+        logout,
+        refreshToken,
+        isAuthenticated: !!user,
+        verifySession,
+      }}
+    >
+      {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);

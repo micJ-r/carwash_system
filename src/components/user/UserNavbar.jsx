@@ -66,14 +66,14 @@ function UserNavbar() {
                 {profileMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-xl z-50">
                     <Link
-                      to="/profile"
+                      to="/user/profile"
                       className="flex items-center px-4 py-3 text-sm text-gray-800 hover:bg-gray-100"
                       onClick={() => setProfileMenuOpen(false)}
                     >
                       <FiUser className="mr-2" /> Profile
                     </Link>
                     <Link
-                      to="/settings"
+                      to="/user/settings"
                       className="flex items-center px-4 py-3 text-sm text-gray-800 hover:bg-gray-100"
                       onClick={() => setProfileMenuOpen(false)}
                     >
@@ -130,8 +130,8 @@ function UserNavbar() {
 
           {isAuthenticated ? (
             <>
-              {navLink('/profile', 'Profile', FiUser)}
-              {navLink('/settings', 'Settings', FiSettings)}
+              {navLink('/user/profile', 'Profile', FiUser)}
+              {navLink('/user/settings', 'Settings', FiSettings)}
               <button
                 onClick={handleLogout}
                 className="flex items-center text-white hover:bg-blue-800 px-4 py-2 rounded-md w-full text-left"
