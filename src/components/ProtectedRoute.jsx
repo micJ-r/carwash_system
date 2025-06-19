@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-function ProtectedRoute({ children, adminOnly = false, userOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, staffOnly = false, userOnly = false }) {
   const { user, isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
@@ -22,12 +22,26 @@ function ProtectedRoute({ children, adminOnly = false, userOnly = false }) {
   // Default to USER if role is missing
   const role = (user?.role || 'USER').toUpperCase();
 
+  // Role-based redirection logic
   if (adminOnly && role !== 'ADMIN') {
-    return <Navigate to="/booking" replace />; // Redirect USER to /booking
+    if (role === 'STAFF') {
+      return <Navigate to="/staff/dashboard" replace />;
+    }
+    return <Navigate to="/user/dashboard" replace />;
+  }
+
+  if (staffOnly && role !== 'STAFF') {
+    if (role === 'ADMIN') {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    return <Navigate to="/user/dashboard" replace />;
   }
 
   if (userOnly && role !== 'USER') {
-    return <Navigate to="/admin/dashboard" replace />; // Redirect ADMIN to /admin/dashboard
+    if (role === 'ADMIN') {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    return <Navigate to="/staff/dashboard" replace />;
   }
 
   return children;

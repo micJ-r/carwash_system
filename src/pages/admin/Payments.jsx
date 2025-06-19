@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/components/Payments.jsx
+import React, { useState, useEffect } from 'react';
 import {
   FiDollarSign,
   FiCreditCard,
@@ -10,78 +11,76 @@ import {
   FiDownload,
   FiRefreshCw
 } from 'react-icons/fi';
+import { useAuth } from '../../contexts/AuthContext';
+import { getAllPayments } from '../../services/paymentService';
+import { toast } from 'react-toastify';
 
 function Payments() {
-  // Sample payment data
-  const [payments, setPayments] = useState([
-    {
-      id: 1,
-      customer: 'John Doe',
-      service: 'Premium Wash',
-      amount: 29.99,
-      date: '2023-05-15 10:30',
-      method: 'Credit Card',
-      status: 'Completed',
-      invoice: 'INV-2023-001'
-    },
-    {
-      id: 2,
-      customer: 'Sarah Smith',
-      service: 'Interior Detailing',
-      amount: 49.99,
-      date: '2023-05-15 11:45',
-      method: 'Cash',
-      status: 'Completed',
-      invoice: 'INV-2023-002'
-    },
-    {
-      id: 3,
-      customer: 'Michael Johnson',
-      service: 'Basic Wash',
-      amount: 15.99,
-      date: '2023-05-16 09:15',
-      method: 'Mobile Payment',
-      status: 'Pending',
-      invoice: 'INV-2023-003'
-    },
-    {
-      id: 4,
-      customer: 'Emily Wilson',
-      service: 'Full Service',
-      amount: 59.99,
-      date: '2023-05-16 14:30',
-      method: 'Credit Card',
-      status: 'Failed',
-      invoice: 'INV-2023-004'
-    }
-  ]);
-
+  const { user } = useAuth();
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
-  const paymentsPerPage = 5;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [completedPayments, setCompletedPayments] = useState(0);
+  const [pendingPayments, setPendingPayments] = useState(0);
 
-  // Filter payments based on search term and status
-  const filteredPayments = payments.filter(payment => {
-    const matchesSearch = payment.customer.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         payment.invoice.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === 'All' || payment.status === selectedStatus;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    if (user && user.role === 'ADMIN') {
+      fetchPayments();
+    } else {
+      setLoading(false);
+      setError('Access restricted to admin users');
+    }
+  }, [user, currentPage, searchTerm, selectedStatus]);
 
-  // Pagination logic
-  const indexOfLastPayment = currentPage * paymentsPerPage;
-  const indexOfFirstPayment = indexOfLastPayment - paymentsPerPage;
-  const currentPayments = filteredPayments.slice(indexOfFirstPayment, indexOfLastPayment);
-  const totalPages = Math.ceil(filteredPayments.length / paymentsPerPage);
+  const fetchPayments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await getAllPayments(currentPage, 5, searchTerm, selectedStatus);
+      setPayments(result.payments);
+      setTotalPages(result.totalPages);
+
+      // Calculate summary stats
+      const total = result.payments.reduce((sum, p) => sum + p.amount, 0);
+      const completed = result.payments.filter(p => p.status === 'COMPLETED').length;
+      const pending = result.payments.filter(p => p.status === 'PENDING').length;
+      setTotalRevenue(total);
+      setCompletedPayments(completed);
+      setPendingPayments(pending);
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to load payments';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      await fetchPayments();
+      toast.success('Payment data refreshed');
+    } catch (err) {
+      toast.error('Failed to refresh payments');
+    }
+  };
+
+  const handleExport = () => {
+    toast.info('Export functionality coming soon!');
+  };
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'Completed':
+      case 'COMPLETED':
         return 'bg-green-100 text-green-800';
-      case 'Pending':
+      case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
-      case 'Failed':
+      case 'FAILED':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -90,21 +89,25 @@ function Payments() {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Completed':
+      case 'COMPLETED':
         return <FiCheckCircle className="mr-1" />;
-      case 'Pending':
+      case 'PENDING':
         return <FiClock className="mr-1" />;
-      case 'Failed':
+      case 'FAILED':
         return <FiXCircle className="mr-1" />;
       default:
         return null;
     }
   };
 
-  const handleRefresh = () => {
-    // In a real app, this would fetch fresh data from the API
-    alert('Refreshing payment data...');
-  };
+  if (!user) return <div className="p-6">Please log in to view payments.</div>;
+  if (user.role !== 'ADMIN') return <div className="p-6">Access restricted to admin users.</div>;
+  if (loading) return <div className="p-6">Loading payments...</div>;
+  if (error) return (
+    <div className="p-6 text-red-500 flex items-center">
+      <FiXCircle className="mr-2" /> Error: {error}
+    </div>
+  );
 
   return (
     <div className="p-6">
@@ -119,7 +122,10 @@ function Payments() {
           >
             <FiRefreshCw className="mr-2" /> Refresh
           </button>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center">
+          <button 
+            onClick={handleExport}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center"
+          >
             <FiDownload className="mr-2" /> Export
           </button>
         </div>
@@ -146,9 +152,9 @@ function Payments() {
               onChange={(e) => setSelectedStatus(e.target.value)}
             >
               <option value="All">All Statuses</option>
-              <option value="Completed">Completed</option>
-              <option value="Pending">Pending</option>
-              <option value="Failed">Failed</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="PENDING">Pending</option>
+              <option value="FAILED">Failed</option>
             </select>
           </div>
         </div>
@@ -160,37 +166,37 @@ function Payments() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-bold mt-1">$155.96</p>
+              <p className="text-2xl font-bold mt-1">${totalRevenue.toFixed(2)}</p>
             </div>
             <div className="p-2 rounded-full bg-blue-100 text-blue-600">
               <FiDollarSign size={20} />
             </div>
           </div>
-          <p className="text-xs text-green-500 mt-2">+12% from last week</p>
+          <p className="text-xs text-gray-500 mt-2">Updated in real-time</p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Completed Payments</p>
-              <p className="text-2xl font-bold mt-1">2</p>
+              <p className="text-2xl font-bold mt-1">{completedPayments}</p>
             </div>
             <div className="p-2 rounded-full bg-green-100 text-green-600">
               <FiCheckCircle size={20} />
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">75% success rate</p>
+          <p className="text-xs text-gray-500 mt-2">Successful transactions</p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Pending Payments</p>
-              <p className="text-2xl font-bold mt-1">1</p>
+              <p className="text-2xl font-bold mt-1">{pendingPayments}</p>
             </div>
             <div className="p-2 rounded-full bg-yellow-100 text-yellow-600">
               <FiClock size={20} />
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">Waiting for confirmation</p>
+          <p className="text-xs text-gray-500 mt-2">Awaiting confirmation</p>
         </div>
       </div>
 
@@ -211,28 +217,28 @@ function Payments() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {currentPayments.length > 0 ? (
-                currentPayments.map((payment) => (
+              {payments.length > 0 ? (
+                payments.map((payment) => (
                   <tr key={payment.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {payment.invoice}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {payment.customer}
+                      {payment.customerName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {payment.service}
+                      {payment.serviceName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       ${payment.amount.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
-                        <FiCreditCard className="mr-2" /> {payment.method}
+                        <FiCreditCard className="mr-2" /> {payment.paymentMethod}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {payment.date}
+                      {new Date(payment.createdAt).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(payment.status)}`}>
@@ -243,8 +249,11 @@ function Payments() {
                       <button className="text-blue-600 hover:text-blue-900 mr-3">
                         View
                       </button>
-                      {payment.status === 'Pending' && (
-                        <button className="text-green-600 hover:text-green-900">
+                      {payment.status === 'PENDING' && (
+                        <button 
+                          onClick={() => toast.info('Process payment functionality coming soon!')}
+                          className="text-green-600 hover:text-green-900"
+                        >
                           Process
                         </button>
                       )}
@@ -263,16 +272,16 @@ function Payments() {
         </div>
 
         {/* Pagination */}
-        {filteredPayments.length > 0 && (
+        {payments.length > 0 && (
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{indexOfFirstPayment + 1}</span> to{' '}
+                  Showing <span className="font-medium">{(currentPage - 1) * 5 + 1}</span> to{' '}
                   <span className="font-medium">
-                    {Math.min(indexOfLastPayment, filteredPayments.length)}
+                    {Math.min(currentPage * 5, (currentPage - 1) * 5 + payments.length)}
                   </span>{' '}
-                  of <span className="font-medium">{filteredPayments.length}</span> payments
+                  of <span className="font-medium">{totalPages * 5}</span> payments
                 </p>
               </div>
               <div>

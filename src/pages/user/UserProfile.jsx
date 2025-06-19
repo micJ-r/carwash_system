@@ -2,35 +2,23 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
-import { FaUser, FaEnvelope, FaPhone, FaLock, FaUserEdit, FaExclamationCircle } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaUserEdit, FaExclamationCircle } from 'react-icons/fa';
 import FormInput from '../../components/common/FormInput';
 
-function MyProfile() {
+function UserProfile() {
   const { user, login } = useAuth();
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
     phone: user?.phone || '',
   });
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
   const [errors, setErrors] = useState({});
-  const [passwordErrors, setPasswordErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setErrors({ ...errors, [e.target.name]: '' });
-  };
-
-  const handlePasswordChange = (e) => {
-    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
-    setPasswordErrors({ ...passwordErrors, [e.target.name]: '' });
   };
 
   const validateProfileForm = () => {
@@ -40,17 +28,6 @@ function MyProfile() {
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format';
     if (!formData.phone) newErrors.phone = 'Phone number is required';
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const validatePasswordForm = () => {
-    const newErrors = {};
-    if (!passwordData.currentPassword) newErrors.currentPassword = 'Current password is required';
-    if (!passwordData.newPassword) newErrors.newPassword = 'New password is required';
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords must match';
-    }
-    setPasswordErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -64,7 +41,7 @@ function MyProfile() {
         username: formData.username,
         email: formData.email,
         phone: formData.phone,
-        role: 'ADMIN',
+        role: 'USER',
       };
       const response = await axios.put(`/auth/users/${user.id}`, updateData, {
         withCredentials: true,
@@ -99,53 +76,12 @@ function MyProfile() {
     }
   };
 
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    if (!validatePasswordForm()) return;
-    setPasswordLoading(true);
-    try {
-      console.log('Updating password for user ID:', user.id);
-      const updateData = {
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-      };
-      await axios.patch(`/auth/users/${user.id}/password`, updateData, {
-        withCredentials: true,
-      });
-      toast.success('Password updated successfully');
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err) {
-      console.error('Error updating password:', err);
-      if (err.response?.status === 400) {
-        const errorData = err.response.data;
-        if (errorData.error) {
-          toast.error(errorData.error);
-          setPasswordErrors({ general: errorData.error });
-        } else {
-          setPasswordErrors(errorData.details || errorData || {});
-          toast.error('Please correct the errors');
-        }
-      } else if (err.response?.status === 401) {
-        toast.error('Invalid current password or session expired');
-        setPasswordErrors({ general: 'Invalid current password' });
-      } else if (err.response?.status === 403) {
-        toast.error('Access denied');
-        setPasswordErrors({ general: 'Unauthorized access' });
-      } else {
-        toast.error('Failed to update password');
-        setPasswordErrors({ general: 'Failed to update password' });
-      }
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-md">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
           <FaUserEdit className="mr-2 text-blue-600" />
-          Admin Profile
+          User Profile
         </h2>
         {errors.general && (
           <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md flex items-center">
@@ -246,78 +182,9 @@ function MyProfile() {
             )}
           </div>
         </form>
-
-        <hr className="my-6 border-gray-200" />
-
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Change Password</h3>
-        {passwordErrors.general && (
-          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md flex items-center">
-            <FaExclamationCircle className="mr-2" />
-            {passwordErrors.general}
-          </div>
-        )}
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <FormInput
-            label="Current Password"
-            type="password"
-            name="currentPassword"
-            value={passwordData.currentPassword}
-            onChange={handlePasswordChange}
-            placeholder="Enter current password"
-            required
-            icon={<FaLock />}
-            error={passwordErrors.currentPassword}
-            className="w-full px-4 py-2 border rounded-md"
-            aria-label="Current password input"
-          />
-          <FormInput
-            label="New Password"
-            type="password"
-            name="newPassword"
-            value={passwordData.newPassword}
-            onChange={handlePasswordChange}
-            placeholder="Enter new password"
-            required
-            icon={<FaLock />}
-            error={passwordErrors.newPassword}
-            className="w-full px-4 py-2 border rounded-md"
-            aria-label="New password input"
-          />
-          <FormInput
-            label="Confirm New Password"
-            type="password"
-            name="confirmPassword"
-            value={passwordData.confirmPassword}
-            onChange={handlePasswordChange}
-            placeholder="Confirm new password"
-            required
-            icon={<FaLock />}
-            error={passwordErrors.confirmPassword}
-            className="w-full px-4 py-2 border rounded-md"
-            aria-label="Confirm new password input"
-          />
-          <button
-            type="submit"
-            disabled={passwordLoading}
-            className={`bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition ${passwordLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            aria-label="Change password"
-          >
-            {passwordLoading ? (
-              <span className="flex items-center">
-                <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
-                </svg>
-                Saving...
-              </span>
-            ) : (
-              'Change Password'
-            )}
-          </button>
-        </form>
       </div>
     </div>
   );
 }
 
-export default MyProfile;
+export default UserProfile;

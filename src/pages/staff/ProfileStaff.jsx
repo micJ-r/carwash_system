@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { FaUser, FaEnvelope, FaPhone, FaLock, FaUserEdit, FaExclamationCircle } from 'react-icons/fa';
 import FormInput from '../../components/common/FormInput';
 
-function MyProfile() {
+function ProfileStaff() {
   const { user, login } = useAuth();
   const [formData, setFormData] = useState({
     username: user?.username || '',
@@ -64,7 +64,7 @@ function MyProfile() {
         username: formData.username,
         email: formData.email,
         phone: formData.phone,
-        role: 'ADMIN',
+        role: 'STAFF',
       };
       const response = await axios.put(`/auth/users/${user.id}`, updateData, {
         withCredentials: true,
@@ -145,7 +145,7 @@ function MyProfile() {
       <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-md">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
           <FaUserEdit className="mr-2 text-blue-600" />
-          Admin Profile
+          Staff Profile
         </h2>
         {errors.general && (
           <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md flex items-center">
@@ -320,4 +320,4 @@ function MyProfile() {
   );
 }
 
-export default MyProfile;
+export default ProfileStaff;

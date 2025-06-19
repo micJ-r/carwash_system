@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import axios from '../../api/axios';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { register } from '../../services/authService';
+import { FiMail, FiLock, FiUser, FiPhone } from 'react-icons/fi';
+import FormInput from '../../components/common/FormInput';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
-import { FaUser, FaEnvelope, FaPhone, FaLock } from 'react-icons/fa';
 
 const MySwal = withReactContent(Swal);
 
@@ -16,159 +17,253 @@ function Register() {
     confirmPassword: '',
     role: 'USER',
   });
-
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const formRef = useRef(null);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setErrors({ ...errors, [e.target.name]: '' });
+  };
 
   const validateForm = () => {
     const newErrors = {};
+    let isValid = true;
+
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
+      isValid = false;
     } else if (formData.username.length < 3) {
       newErrors.username = 'Username must be at least 3 characters';
+      isValid = false;
     }
 
-    if (!formData.email) {
+    if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
+      isValid = false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email';
+      isValid = false;
     }
 
-    if (!formData.phone) {
+    if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10,15}$/.test(formData.phone)) {
-      newErrors.phone = 'Please enter 10-15 digit phone number';
+      isValid = false;
+    } else if (!/^[\d\s\-()+]{8,}$/.test(formData.phone)) {
+      newErrors.phone = 'Please enter a valid phone number';
+      isValid = false;
     }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
+      isValid = false;
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
-    } else if (!/[A-Z]/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one uppercase letter';
+      isValid = false;
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+      isValid = false;
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+      isValid = false;
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return isValid;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
+  const showSuccessAlert = () => {
+    MySwal.fire({
+      title: <p>Registration Successful!</p>,
+      icon: 'success',
+      html: <p>You can now login with your credentials.</p>,
+      confirmButtonText: 'Go to Login',
+      confirmButtonColor: '#ffe31a',
+    }).then(() => {
+      // Clear form after successful submission
+      setFormData({
+        username: '',
+        email: '',
+        phone: '',
+        password: '',
+        confirmPassword: '',
+        role: 'USER',
+      });
+      if (formRef.current) {
+        formRef.current.reset();
+      }
+      navigate('/login');
+    });
+  };
+
+  const showErrorAlert = (message) => {
+    MySwal.fire({
+      title: <p>Registration Failed</p>,
+      icon: 'error',
+      html: <p>{message}</p>,
+      confirmButtonText: 'Try Again',
+      confirmButtonColor: '#ffe31a',
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
-
     setLoading(true);
 
+    if (!validateForm()) {
+      setLoading(false);
+      showErrorAlert('Please fix the errors in the form');
+      return;
+    }
+
     try {
-      const response = await axios.post('http://localhost:8080/api/auth/register', formData);
-
-      await MySwal.fire({
-        icon: 'success',
-        title: response.data.message || 'Registration Successful!',
-        text: `Welcome ${response.data.username}!`
-      });
-
-      navigate('/login');
+      await register(formData);
+      showSuccessAlert();
     } catch (err) {
-      const errorData = err.response?.data;
-      let errorMessage = "Registration failed. Please try again.";
+      let errorMessage = 'Registration failed. Please try again.';
 
-      if (errorData) {
-        if (typeof errorData === 'object') {
-          const firstError = Object.values(errorData)[0];
-          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+      if (err.response?.status === 400) {
+        const backendErrors = err.response.data;
+        if (typeof backendErrors === 'object' && !backendErrors.error) {
+          setErrors(backendErrors);
+          errorMessage = 'Please fix the errors in the form.';
         } else {
-          errorMessage = errorData;
+          setErrors({ general: backendErrors.error || errorMessage });
+          errorMessage = backendErrors.error || errorMessage;
         }
       }
 
-      await MySwal.fire({
-        icon: 'error',
-        title: 'Registration Failed',
-        text: errorMessage
-      });
+      showErrorAlert(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderInput = (label, name, type, placeholder, IconComponent, error) => (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="relative">
-        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-          <IconComponent className="text-lg" />
-        </span>
-        <input
-          type={type}
-          id={name}
-          name={name}
-          value={formData[name]}
-          onChange={handleChange}
-          placeholder={placeholder}
-          autoComplete="off"
-          required
-          className={`pl-10 w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
-            error ? 'border-red-500' : 'border-gray-300'
-          }`}
-        />
-      </div>
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-    </div>
-  );
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-100 px-4">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-800">Create Account</h2>
-          <p className="text-gray-500 mt-2">Join us today!</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-wht-900 py-12 px-4">
+      <div className="max-w-md w-full bg-gray-800 p-8 rounded-xl shadow-md">
+        <h2 className="text-3xl font-bold text-center text-[#ffe31a] mb-6">Register</h2>
 
-        <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-5">
-          {renderInput('Username', 'username', 'text', 'Enter your username', FaUser, errors.username)}
-          {renderInput('Email Address', 'email', 'email', 'your@email.com', FaEnvelope, errors.email)}
-          {renderInput('Phone Number', 'phone', 'tel', '254712345678', FaPhone, errors.phone)}
-          {renderInput('Password', 'password', 'password', '••••••••', FaLock, errors.password)}
-          {renderInput('Confirm Password', 'confirmPassword', 'password', '••••••••', FaLock, errors.confirmPassword)}
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="space-y-6"
+          autoComplete="off"
+        >
+          <input type="hidden" autoComplete="false" />
+          <input type="text" name="fakeusernameremembered" style={{ display: 'none' }} />
+          <input type="password" name="fakepasswordremembered" style={{ display: 'none' }} />
 
+          <FormInput
+            label="Username"
+            type="text"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            placeholder="Enter your username"
+            icon={<FiUser className="text-[#ffe31a]" />}
+            className="w-full px-4 py-3 border border-gray-700 rounded-md bg-gray-900 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ffe31a]"
+            aria-label="Username input"
+            error={errors.username}
+            autoComplete="new-username"
+          />
+          <FormInput
+            label="Email"
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter your email"
+            icon={<FiMail className="text-[#ffe31a]" />}
+            className="w-full px-4 py-3 border border-gray-700 rounded-md bg-gray-900 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ffe31a]"
+            aria-label="Email input"
+            error={errors.email}
+            autoComplete="new-email"
+          />
+          <FormInput
+            label="Phone"
+            type="tel"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="Enter your phone number"
+            icon={<FiPhone className="text-[#ffe31a]" />}
+            className="w-full px-4 py-3 border border-gray-700 rounded-md bg-gray-900 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ffe31a]"
+            aria-label="Phone input"
+            error={errors.phone}
+            autoComplete="new-phone"
+          />
+          <FormInput
+            label="Password"
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Enter your password"
+            icon={<FiLock className="text-[#ffe31a]" />}
+            className="w-full px-4 py-3 border border-gray-700 rounded-md bg-gray-900 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ffe31a]"
+            aria-label="Password input"
+            error={errors.password}
+            autoComplete="new-password"
+          />
+          <FormInput
+            label="Confirm Password"
+            type="password"
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            placeholder="Confirm your password"
+            icon={<FiLock className="text-[#ffe31a]" />}
+            className="w-full px-4 py-3 border border-gray-700 rounded-md bg-gray-900 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ffe31a]"
+            aria-label="Confirm password input"
+            error={errors.confirmPassword}
+            autoComplete="new-password"
+          />
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all ${
-              loading ? 'opacity-70 cursor-not-allowed' : ''
-            }`}
+            className={`w-full bg-[#ffe31a] text-gray-900 font-semibold py-3 rounded-md hover:bg-yellow-400 transition ${loading ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            aria-label="Submit registration"
           >
             {loading ? (
               <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-5 w-5 text-gray-900"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
-                Creating Account...
+                Registering...
               </span>
-            ) : 'Create Account'}
+            ) : (
+              'Register'
+            )}
           </button>
-
-          <div className="text-center text-sm text-gray-500 mt-4">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 hover:underline">
-              Sign in
-            </Link>
-          </div>
         </form>
+        <p className="mt-2 text-center text-sm text-gray-400">
+          Already have an account?{' '}
+          <a href="/login" className="text-[#ffe31a] hover:underline">
+            Login
+          </a>
+        </p>
       </div>
     </div>
   );

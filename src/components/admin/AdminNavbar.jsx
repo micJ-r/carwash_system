@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaUserCircle, FaCarAlt } from "react-icons/fa";
+import { FaUserCircle } from "react-icons/fa";
 import { MdLogout, MdNotificationsNone } from "react-icons/md";
 import { HiOutlineMenu } from "react-icons/hi";
 import { FiSearch, FiCalendar } from "react-icons/fi";
@@ -38,7 +38,6 @@ const AdminNavbar = ({ toggleSidebar }) => {
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      // Close mobile search when resizing to desktop
       if (window.innerWidth >= 768) {
         setMobileSearchOpen(false);
       }
@@ -69,9 +68,8 @@ const AdminNavbar = ({ toggleSidebar }) => {
           </button>
 
           <Link to="/admin/dashboard" className="flex items-center gap-2 text-xl font-bold text-blue-600">
-            <FaCarAlt className="text-blue-600" />
-            <span className="hidden sm:inline">WashPro Admin</span>
-            <span className="sm:hidden">WashPro</span>
+            <span className="hidden sm:inline">SparkleWash Admin</span>
+            <span className="sm:hidden">SparkleWash</span>
           </Link>
 
           {/* Desktop Search */}

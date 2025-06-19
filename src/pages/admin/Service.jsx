@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import {
   FiPlus,
   FiEdit2,
@@ -11,8 +11,16 @@ import {
   FiX,
   FiCheck,
   FiChevronLeft,
-  FiChevronRight
+  FiChevronRight,
+  FiCalendar,
 } from 'react-icons/fi';
+import {
+  getServices,
+  createService,
+  updateService,
+  deleteService,
+} from '../../services/serviceService';
+import axiosInstance from '../../api/axios';
 
 function WashService() {
   const [services, setServices] = useState([]);
@@ -23,44 +31,24 @@ function WashService() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    price: 0,
-    duration: 0
+    price: '',
+    duration: '',
+    serviceType: '',
   });
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [newTimeSlot, setNewTimeSlot] = useState({ date: '', startTime: '', endTime: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const servicesPerPage = 5;
   const navigate = useNavigate();
 
-  // Base URL for the backend API
-  const API_URL = 'http://localhost:8080/api/services';
-
-  // Configure axios to send cookies
-  axios.defaults.withCredentials = true;
-
-  // Add response interceptor to handle 401 errors
-  axios.interceptors.response.use(
-    response => response,
-    async error => {
-      if (error.response?.status === 401) {
-        try {
-          await axios.post('http://localhost:8080/api/auth/refresh');
-          return axios(error.config);
-        } catch (refreshError) {
-          navigate('/login');
-          return Promise.reject(refreshError);
-        }
-      }
-      return Promise.reject(error);
-    }
-  );
-
-  // Fetch services from backend
+  // Fetch services
   const fetchServices = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(API_URL);
-      setServices(response.data);
+      const data = await getServices();
+      setServices(data);
       setError('');
     } catch (err) {
       handleError(err, 'Failed to load services');
@@ -70,56 +58,101 @@ function WashService() {
     }
   };
 
+  // Fetch time slots for a service
+  const fetchTimeSlots = async (serviceId) => {
+    try {
+      const response = await axiosInstance.get(`/timeslots/available?serviceId=${serviceId}&date=`);
+      setTimeSlots(response.data);
+    } catch (err) {
+      toast.error('Failed to load time slots');
+    }
+  };
+
   useEffect(() => {
     fetchServices();
   }, []);
 
-  // Handle form input changes
+  // Handle form input changes for service
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: name === 'price' || name === 'duration' ? parseFloat(value) : value
+      [name]:
+        name === 'price'
+          ? value === ''
+            ? ''
+            : parseFloat(value) || ''
+          : name === 'duration'
+          ? value === ''
+            ? ''
+            : parseInt(value) || ''
+          : value,
     });
+  };
+
+  // Handle time slot input changes
+  const handleTimeSlotChange = (e) => {
+    const { name, value } = e.target;
+    setNewTimeSlot({ ...newTimeSlot, [name]: value });
   };
 
   // Open modal for creating or editing a service
   const openModal = (service = null) => {
     if (service) {
+      if (!service.id || service.price == null || service.duration == null) {
+        toast.error('Invalid service data');
+        return;
+      }
       setIsEditMode(true);
       setCurrentService(service);
       setFormData({
-        name: service.name,
-        description: service.description,
-        price: service.price,
-        duration: service.duration
+        name: service.name || '',
+        description: service.description || '',
+        price: service.price.toString(),
+        duration: service.duration.toString(),
+        serviceType: service.serviceType || '',
       });
+      fetchTimeSlots(service.id);
     } else {
       setIsEditMode(false);
       setCurrentService(null);
       setFormData({
         name: '',
         description: '',
-        price: 0,
-        duration: 0
+        price: '',
+        duration: '',
+        serviceType: '',
       });
+      setTimeSlots([]);
     }
+    setNewTimeSlot({ date: '', startTime: '', endTime: '' });
     setError('');
     setIsModalOpen(true);
   };
 
-  // Handle form submission for create/update
+  // Handle form submission for create/update service
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.name || formData.price === '' || formData.duration === '' || !formData.serviceType) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    if (parseFloat(formData.price) < 0 || parseInt(formData.duration) < 1) {
+      setError('Price must be non-negative and duration must be at least 1 minute');
+      return;
+    }
     try {
+      const payload = {
+        ...formData,
+        price: parseFloat(formData.price),
+        duration: parseInt(formData.duration),
+      };
       if (isEditMode) {
-        await axios.put(
-          `${API_URL}/${currentService.id}`,
-          formData,
-          { withCredentials: true }
-        );
+        await updateService(currentService.id, payload);
+        toast.success('Service updated successfully');
       } else {
-        await axios.post(API_URL, formData, { withCredentials: true });
+        await createService(payload);
+        toast.success('Service created successfully');
       }
       fetchServices();
       setIsModalOpen(false);
@@ -128,11 +161,45 @@ function WashService() {
     }
   };
 
+  // Handle time slot submission
+  const handleAddTimeSlot = async (e) => {
+    e.preventDefault();
+    if (!newTimeSlot.date || !newTimeSlot.startTime || !newTimeSlot.endTime) {
+      setError('Please fill in all time slot fields');
+      return;
+    }
+    try {
+      await axiosInstance.post('/timeslots', {
+        ...newTimeSlot,
+        serviceId: currentService?.id,
+      });
+      toast.success('Time slot added successfully');
+      fetchTimeSlots(currentService?.id);
+      setNewTimeSlot({ date: '', startTime: '', endTime: '' });
+    } catch (err) {
+      handleError(err, 'Failed to add time slot');
+    }
+  };
+
+  // Handle time slot deletion
+  const handleDeleteTimeSlot = async (id) => {
+    if (window.confirm('Are you sure you want to delete this time slot?')) {
+      try {
+        await axiosInstance.delete(`/timeslots/${id}`);
+        toast.success('Time slot deleted successfully');
+        fetchTimeSlots(currentService?.id);
+      } catch (err) {
+        toast.error('Failed to delete time slot');
+      }
+    }
+  };
+
   // Handle service deletion
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this service?')) {
       try {
-        await axios.delete(`${API_URL}/${id}`, { withCredentials: true });
+        await deleteService(id);
+        toast.success('Service deleted successfully');
         fetchServices();
       } catch (err) {
         handleError(err, 'Failed to delete service');
@@ -146,23 +213,26 @@ function WashService() {
       setError('Unauthorized: Please log in again');
     } else if (err.response?.data?.error) {
       setError(err.response.data.error);
-    } else if (err.response?.data) {
-      // Handle validation errors from Spring
-      const errors = err.response.data;
-      if (typeof errors === 'object') {
-        setError(Object.values(errors).join(', '));
-      } else {
-        setError(defaultMessage);
-      }
+    } else if (err.response?.data?.details) {
+      const errors = err.response.data.details;
+      setError(
+        typeof errors === 'object'
+          ? Object.entries(errors)
+              .map(([field, message]) => `${field}: ${message}`)
+              .join(', ')
+          : defaultMessage
+      );
     } else {
       setError(defaultMessage);
     }
   };
 
   // Filter services based on search term
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredServices = services.filter(
+    (service) =>
+      service &&
+      ((service.name && service.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (service.description && service.description.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   // Pagination logic
@@ -203,7 +273,12 @@ function WashService() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8">Loading services...</div>
+        <div className="flex justify-center">
+          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" fill="none" />
+          </svg>
+        </div>
       ) : (
         <>
           {/* Services Table */}
@@ -212,15 +287,24 @@ function WashService() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Service Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <FiDollarSign className="inline mr-1" /> Price
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <FiClock className="inline mr-1" /> Duration (mins)
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -231,10 +315,13 @@ function WashService() {
                           <div className="text-sm font-medium text-gray-900">{service.name}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{service.description}</div>
+                          <div className="text-sm text-gray-900">{service.description || '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">${service.price.toFixed(2)}</div>
+                          <div className="text-sm text-gray-900">{service.serviceType || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">${parseFloat(service.price).toFixed(2)}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{service.duration}</div>
@@ -243,12 +330,14 @@ function WashService() {
                           <button
                             onClick={() => openModal(service)}
                             className="text-blue-600 hover:text-blue-900 mr-3"
+                            aria-label={`Edit ${service.name}`}
                           >
                             <FiEdit2 />
                           </button>
                           <button
                             onClick={() => handleDelete(service.id)}
                             className="text-red-600 hover:text-red-900"
+                            aria-label={`Delete ${service.name}`}
                           >
                             <FiTrash2 />
                           </button>
@@ -257,7 +346,7 @@ function WashService() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
                         {services.length === 0 ? 'No services available' : 'No matching services found'}
                       </td>
                     </tr>
@@ -280,7 +369,10 @@ function WashService() {
                     </p>
                   </div>
                   <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <nav
+                      className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                      aria-label="Pagination"
+                    >
                       <button
                         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                         disabled={currentPage === 1}
@@ -317,7 +409,7 @@ function WashService() {
         </>
       )}
 
-      {/* Modal for Create/Edit Service */}
+      {/* Modal for Create/Edit Service and Time Slots */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
@@ -340,6 +432,18 @@ function WashService() {
                   onChange={handleInputChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Service Type</label>
+                <input
+                  type="text"
+                  name="serviceType"
+                  value={formData.serviceType}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  placeholder="e.g., BASIC, PREMIUM, DELUXE"
                 />
               </div>
               <div className="mb-4">
@@ -396,6 +500,92 @@ function WashService() {
                 </button>
               </div>
             </form>
+
+            {/* Time Slots Section (only in edit mode) */}
+            {isEditMode && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center">
+                  <FiCalendar className="mr-2" /> Time Slots
+                </h3>
+                <form onSubmit={handleAddTimeSlot} className="mb-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={newTimeSlot.date}
+                        onChange={handleTimeSlotChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Start Time</label>
+                      <input
+                        type="time"
+                        name="startTime"
+                        value={newTimeSlot.startTime}
+                        onChange={handleTimeSlotChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">End Time</label>
+                      <input
+                        type="time"
+                        name="endTime"
+                        value={newTimeSlot.endTime}
+                        onChange={handleTimeSlotChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="mt-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                  >
+                    <FiPlus className="mr-2" /> Add Time Slot
+                  </button>
+                </form>
+                {timeSlots.length > 0 ? (
+                  <div className="max-h-40 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="py-1 text-left">Date</th>
+                          <th className="py-1 text-left">Start Time</th>
+                          <th className="py-1 text-left">End Time</th>
+                          <th className="py-1 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {timeSlots.map((slot) => (
+                          <tr key={slot.id} className="border-b">
+                            <td className="py-1">{slot.date}</td>
+                            <td className="py-1">{slot.startTime}</td>
+                            <td className="py-1">{slot.endTime}</td>
+                            <td className="py-1 text-right">
+                              <button
+                                onClick={() => handleDeleteTimeSlot(slot.id)}
+                                className="text-red-600 hover:text-red-900"
+                                aria-label={`Delete time slot for ${slot.date}`}
+                              >
+                                <FiTrash2 />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No time slots available</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
